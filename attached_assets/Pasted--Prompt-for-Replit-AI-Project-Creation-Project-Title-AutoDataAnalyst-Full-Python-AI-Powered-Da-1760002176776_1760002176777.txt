@@ -1,0 +1,347 @@
+🧠 Prompt for Replit AI Project Creation
+Project Title:
+
+AutoDataAnalyst – Full Python AI-Powered Data Cleaning, Insight, and Visualization Web App
+
+🔍 Goal
+
+Create a pure Python-based AI web app that allows users to:
+
+Upload CSV/XLSX datasets.
+
+Automatically clean and preprocess the data.
+
+View cleaning reports and generated insights.
+
+Interact with data visualizations through a user-friendly Python UI.
+
+Chat with an AI assistant that answers questions about the dataset.
+
+Download both the cleaned dataset and visualizations.
+
+⚡ This app is entirely built using Python — no JS frameworks.
+
+⚙ Core Features
+1. File Upload & Data Cleaning
+
+Accept .csv and .xlsx files (up to 20 MB).
+
+Automatically:
+
+Detect data types
+
+Handle missing values
+
+Remove duplicates and outliers
+
+Normalize numerical features
+
+Output:
+
+Cleaned dataset
+
+Data cleaning report (JSON or formatted text)
+
+Downloadable cleaned CSV/XLSX file
+
+2. Insight Generation
+
+Generate:
+
+Descriptive statistics (mean, std, min, max, etc.)
+
+Correlation matrix
+
+Distribution of categorical features
+
+Feature importance (for target column, if selected)
+
+Enable comparisons (e.g., how one column affects another)
+
+3. Interactive Visualization Dashboard
+
+Generate interactive charts:
+
+Histograms, bar charts, scatter plots, box plots
+
+Correlation heatmaps
+
+Time-series plots (if applicable)
+
+Use:
+
+Plotly or Altair (interactive)
+
+Matplotlib/Seaborn for downloadable static plots
+
+Offer templates:
+
+Summary Dashboard
+
+Correlation View
+
+Time Series View
+
+4. AI Chatbot Assistant
+
+Integrated using OpenAI API (GPT-4 or GPT-4o mini).
+
+Understands:
+
+Dataset schema, summary, and insights
+
+Can answer: “What columns are most correlated with revenue?”
+
+Responds with data-backed answers, citing values/stats.
+
+5. Visualization API / Export
+
+Python backend generates:
+
+Chart configurations (JSON)
+
+PNG/SVG images of charts
+
+Download options:
+
+Cleaned dataset
+
+Dashboard chart snapshots
+
+JSON config of charts
+
+6. User Interface
+
+Built using Streamlit or Gradio
+
+Key UI components:
+
+File uploader
+
+Data preview
+
+Cleaning report
+
+Insight summary
+
+Chart selector
+
+AI chatbot panel
+
+Download buttons
+
+7. Backend (FastAPI or Internal Python Logic)
+
+Handle:
+
+File processing
+
+Data transformation
+
+Chart rendering
+
+AI interaction (chatbot logic)
+
+Use FastAPI for structured API if needed, or keep logic inside Streamlit/Gradio for simplicity.
+
+8. Data Storage
+
+Use /tmp or in-memory storage for:
+
+Uploaded files
+
+Cleaned data
+
+Rendered visualizations
+
+🧩 Project Tools / Stack
+Layer	Technology	Purpose
+UI	Streamlit or Gradio	Full web interface in Python
+Backend	FastAPI (optional) or native Python	File handling, API endpoints
+Data Cleaning	pandas, numpy, scikit-learn	Cleaning, stats, transformation
+Visualization	plotly, seaborn, matplotlib	Interactive and static data visualization
+AI Assistant	OpenAI GPT-4 or GPT-4o-mini	Natural language interaction
+File Handling	os, tempfile, openpyxl, csv	Reading and writing data
+Deployment	Replit (auto-run with main.py)	Hosting and testing
+🧰 Expected Python Endpoints / Functions
+
+These can be built as FastAPI endpoints, or as functions called directly in Streamlit or Gradio.
+
+# Upload and clean data
+def upload_and_clean(file) -> dict:
+    # Returns cleaned DataFrame and report
+
+# Download cleaned dataset
+def download_cleaned(file_id) -> FileResponse:
+    # Returns CSV or XLSX file
+
+# Generate insight summary
+def generate_insights(df) -> dict:
+    # Returns JSON-like dict with stats
+
+# Generate chart config
+def suggest_chart_config(df, x_col, y_col, chart_type) -> dict:
+    # Returns chart data/config
+
+# Render chart as image
+def render_chart(df, chart_config) -> str:
+    # Saves chart image path
+
+# Handle chatbot query
+def ask_ai_question(df_summary, user_input) -> str:
+    # Uses OpenAI API to answer question
+
+🧪 Example Workflow
+
+User uploads a CSV file in Streamlit.
+
+Backend (Python) auto-cleans it → shows before/after summary.
+
+User views insight cards: stats, correlations, outliers, etc.
+
+You said:
+use llama chatbot instead of open ai
+ChatGPT said:
+
+Got it! You want the same AutoDataAnalyst AI-powered data cleaning, insights, visualization app — but instead of using OpenAI’s API (GPT-4/mini) for the chatbot, you want it fully Python-based using a LLaMA chatbot model.
+
+Here’s a fully Python-based prompt for your project, swapping out the OpenAI API for a local LLaMA-based chatbot implementation.
+
+🧠 Prompt for Replit AI Project Creation (Python-based with LLaMA chatbot)
+Project Title:
+
+AutoDataAnalyst – AI-Powered Data Cleaning, Insight, and Visualization Web App (LLaMA Chatbot)
+
+🔍 Goal
+
+Build a full-stack AI web app that automatically cleans uploaded datasets (CSV/XLSX), generates insights, visualizes data interactively, and includes a local LLaMA-based chatbot to answer dataset-related questions — all fully Python-driven with no external AI API calls.
+
+⚙ Core Features
+
+File Upload & Data Cleaning
+
+Accept .csv and .xlsx files (up to 20 MB).
+
+Detect data types, handle missing values, duplicates, outliers, and normalization.
+
+Generate a detailed data cleaning report (JSON).
+
+Allow download of cleaned dataset (CSV/XLSX).
+
+Insight Generation
+
+Descriptive stats, correlations, categorical distributions.
+
+Key insights: variable relationships, feature importance, trends.
+
+Comparison analysis between columns.
+
+Interactive Visualization Dashboard
+
+Multiple dashboard styles: Summary, Correlation, Time-Series views.
+
+Use Plotly or Chart.js for interactive graphs.
+
+Enable download of chart images (PNG) and configs (JSON).
+
+LLaMA-Based AI Chatbot Assistant
+
+Local Python-based LLaMA model for conversational interaction.
+
+Understand dataset context: summary stats, column info, insights.
+
+Answer analytical questions with citations to data.
+
+Example: “What’s the correlation between sales and advertising budget?”
+
+Visualization API
+
+Backend endpoints generate chart configs & chart images (PNG/SVG).
+
+Frontend dynamically renders charts from API responses.
+
+Download Options
+
+Download cleaned dataset.
+
+Download dashboard visuals.
+
+User Interface
+
+React + TailwindCSS responsive UI.
+
+Components: file uploader, dashboard switcher, visualization preview, chatbot panel.
+
+Backend
+
+FastAPI (Python) API + data processing.
+
+pandas, numpy, scikit-learn for cleaning & stats.
+
+plotly/matplotlib for visualization generation.
+
+Local LLaMA chatbot integration using libraries like llama.cpp, transformers, or llama-index.
+
+Frontend
+
+React (Vite) + axios for API calls.
+
+Chart.js or Recharts for frontend graphs.
+
+TailwindCSS for styling.
+
+Optional: framer-motion for animations.
+
+Integration
+
+FastAPI backend on port 8000.
+
+React frontend consuming backend APIs.
+
+Environment variables (.env) for secrets and config.
+
+🧩 Project Tools / Stack
+Layer	Technology	Purpose
+Frontend	React + Vite + TailwindCSS	UI, dashboards, chatbot interface
+Backend	FastAPI (Python)	API, data cleaning, insights, visualization, LLaMA chatbot
+Data Processing	pandas, numpy, scikit-learn	Data cleaning and statistical analysis
+Visualization	Plotly, matplotlib, Chart.js	Interactive charts and dashboards
+AI Chatbot	LLaMA model (via llama.cpp / transformers / llama-index)	Local LLaMA-based chatbot for natural language Q&A
+Storage	Local /tmp	Temporary upload & cleaned dataset storage
+Deployment	Replit (auto-run)	Full app hosting and testing
+🧰 Expected API Endpoints
+
+POST /api/upload
+→ Upload dataset, auto-clean, return summary & cleaning report JSON.
+
+GET /api/download/{filename}
+→ Download cleaned dataset CSV/XLSX.
+
+POST /api/viz/suggest
+→ Suggest chart configurations based on dataset.
+
+POST /api/viz/render
+→ Generate and return chart image (PNG).
+
+POST /api/chat/query
+→ Query LLaMA chatbot with dataset context and question, return answer.
+
+🔧 Additional Implementation Notes
+
+LLaMA Chatbot Integration:
+Use a local lightweight LLaMA inference solution (e.g., llama.cpp Python bindings, HuggingFace transformers with a smaller LLaMA checkpoint, or llama-index for data-augmented LLaMA queries).
+
+Load dataset metadata and summaries as context prompt.
+
+Implement retrieval or prompt engineering for accurate, data-driven responses.
+
+Optionally fine-tune or embed dataset info with vector databases (e.g., FAISS).
+
+Data Cleaning Module:
+Implement automated pipelines using pandas and scikit-learn for: missing data imputation, outlier detection (e.g., IQR method), duplicates removal, normalization/scaling.
+
+Visualization Generation:
+Backend generates Plotly figures and serializes to JSON for frontend rendering or PNG images for downloads.
+
+Frontend Chat UI:
+Connects to backend /api/chat/query endpoint sending user question and receives streamed or complete LLaMA-generated response.
