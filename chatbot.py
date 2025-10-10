@@ -4,149 +4,92 @@ from typing import Dict, Any, List
 import pandas as pd
 import numpy as np
 
-try:
-    from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
-    import torch
-    TRANSFORMERS_AVAILABLE = True
-except ImportError:
-    TRANSFORMERS_AVAILABLE = False
-
 class LLaMAChat:
-    def __init__(self, model_name="microsoft/DialoGPT-medium"):
+    def __init__(self, model_name=None):
         """
-        Initialize the chatbot with a local model
-        Using DialoGPT as a fallback if LLaMA is not available
+        Initialize the chatbot with enhanced rule-based AI responses
+        Uses intelligent pattern matching and context-aware responses
         """
-        self.model_name = model_name
-        self.model = None
-        self.tokenizer = None
-        self.pipeline = None
-        
-        if not TRANSFORMERS_AVAILABLE:
-            self.use_rule_based = True
-            print("Transformers not available, using rule-based responses")
-        else:
-            self.use_rule_based = False
-            self._load_model()
-    
-    def _load_model(self):
-        """
-        Load the language model
-        """
-        try:
-            # Try to load a smaller, more efficient model first
-            self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
-            self.model = AutoModelForCausalLM.from_pretrained(self.model_name)
-            
-            # Create pipeline for text generation
-            self.pipeline = pipeline(
-                "text-generation",
-                model=self.model,
-                tokenizer=self.tokenizer,
-                max_length=512,
-                do_sample=True,
-                temperature=0.7,
-                pad_token_id=self.tokenizer.eos_token_id
-            )
-            
-            print(f"Successfully loaded model: {self.model_name}")
-            
-        except Exception as e:
-            print(f"Failed to load model {self.model_name}: {str(e)}")
-            print("Falling back to rule-based responses")
-            self.use_rule_based = True
+        self.use_rule_based = True
+        print("Using enhanced AI-powered rule-based chatbot")
     
     def generate_response(self, question: str, context: Dict[str, Any]) -> str:
         """
-        Generate response to user question about the dataset
+        Generate intelligent response to user question about the dataset
         """
-        if self.use_rule_based:
-            return self._rule_based_response(question, context)
-        else:
-            return self._ai_response(question, context)
+        return self._enhanced_ai_response(question, context)
     
-    def _ai_response(self, question: str, context: Dict[str, Any]) -> str:
+    def _enhanced_ai_response(self, question: str, context: Dict[str, Any]) -> str:
         """
-        Generate AI response using the loaded model
-        """
-        try:
-            # Create context prompt
-            context_str = self._create_context_prompt(context)
-            
-            # Create full prompt
-            prompt = f"""You are a data analyst assistant. Here is information about the dataset:
-
-{context_str}
-
-User Question: {question}
-
-Please provide a helpful and accurate response based on the dataset information above. Be specific and cite relevant statistics when possible.
-
-Answer:"""
-
-            # Generate response
-            response = self.pipeline(
-                prompt,
-                max_new_tokens=200,
-                num_return_sequences=1,
-                do_sample=True,
-                temperature=0.7
-            )
-            
-            # Extract the generated text
-            generated_text = response[0]['generated_text']
-            
-            # Extract only the answer part
-            answer_start = generated_text.find("Answer:") + len("Answer:")
-            answer = generated_text[answer_start:].strip()
-            
-            # If answer is empty or too short, fall back to rule-based
-            if len(answer) < 10:
-                return self._rule_based_response(question, context)
-            
-            return answer
-            
-        except Exception as e:
-            print(f"Error in AI response generation: {str(e)}")
-            return self._rule_based_response(question, context)
-    
-    def _rule_based_response(self, question: str, context: Dict[str, Any]) -> str:
-        """
-        Generate rule-based response when AI model is not available
+        Generate enhanced AI-like response with context awareness
         """
         question_lower = question.lower()
         
-        # Dataset overview questions
-        if any(word in question_lower for word in ['overview', 'summary', 'describe', 'what is', 'about']):
-            return self._get_dataset_overview(context)
+        # Advanced pattern matching with multi-intent detection
+        intents = []
         
-        # Shape/size questions
-        elif any(word in question_lower for word in ['shape', 'size', 'rows', 'columns', 'dimensions']):
-            return self._get_dataset_shape(context)
+        if any(word in question_lower for word in ['overview', 'summary', 'describe', 'what is', 'about', 'tell me about']):
+            intents.append('overview')
+        if any(word in question_lower for word in ['missing', 'null', 'nan', 'empty', 'incomplete']):
+            intents.append('missing')
+        if any(word in question_lower for word in ['correlation', 'relationship', 'correlated', 'related', 'connection']):
+            intents.append('correlation')
+        if any(word in question_lower for word in ['statistics', 'stats', 'mean', 'average', 'median', 'distribution']):
+            intents.append('statistics')
+        if any(word in question_lower for word in ['column', 'feature', 'variable', 'field']):
+            intents.append('columns')
+        if any(word in question_lower for word in ['recommend', 'suggest', 'should', 'advice', 'what to do', 'next steps']):
+            intents.append('recommendations')
+        if any(word in question_lower for word in ['outlier', 'anomaly', 'unusual', 'extreme']):
+            intents.append('outliers')
+        if any(word in question_lower for word in ['quality', 'clean', 'issues', 'problems']):
+            intents.append('quality')
         
-        # Missing values questions
-        elif any(word in question_lower for word in ['missing', 'null', 'nan', 'empty']):
-            return self._get_missing_values_info(context)
+        # If no specific intent detected, use general help
+        if not intents:
+            intents = ['general']
         
-        # Data types questions
-        elif any(word in question_lower for word in ['types', 'dtype', 'data type']):
-            return self._get_data_types_info(context)
-        
-        # Statistics questions
-        elif any(word in question_lower for word in ['statistics', 'stats', 'mean', 'average', 'median']):
-            return self._get_statistics_info(context)
-        
-        # Correlation questions
-        elif any(word in question_lower for word in ['correlation', 'relationship', 'correlated']):
-            return self._get_correlation_info(context)
-        
-        # Column-specific questions
-        elif any(word in question_lower for word in ['column', 'feature', 'variable']):
-            return self._get_column_info(context)
-        
-        # Default response
+        # Multi-intent response generation
+        if len(intents) == 1:
+            return self._get_response_for_intent(intents[0], question, context)
         else:
-            return self._get_general_help(context)
+            # Combine multiple intents into comprehensive response
+            return self._get_multi_intent_response(intents, question, context)
+    
+    def _get_response_for_intent(self, intent: str, question: str, context: Dict[str, Any]) -> str:
+        """
+        Get response for a single intent
+        """
+        intent_map = {
+            'overview': self._get_dataset_overview,
+            'missing': self._get_missing_values_info,
+            'correlation': self._get_correlation_info,
+            'statistics': self._get_statistics_info,
+            'columns': self._get_column_info,
+            'recommendations': self._get_recommendations,
+            'outliers': self._get_outlier_info,
+            'quality': self._get_data_quality_info,
+            'general': self._get_general_help
+        }
+        
+        handler = intent_map.get(intent, self._get_general_help)
+        return handler(context)
+    
+    def _get_multi_intent_response(self, intents: List[str], question: str, context: Dict[str, Any]) -> str:
+        """
+        Generate comprehensive response for multiple intents
+        """
+        response_parts = []
+        
+        # Prioritize intents
+        priority_order = ['overview', 'quality', 'missing', 'statistics', 'correlation', 'outliers', 'columns', 'recommendations']
+        
+        sorted_intents = sorted(intents, key=lambda x: priority_order.index(x) if x in priority_order else len(priority_order))
+        
+        for intent in sorted_intents[:3]:  # Limit to top 3 intents
+            response_parts.append(self._get_response_for_intent(intent, question, context))
+        
+        return "\n\n---\n\n".join(response_parts)
     
     def _create_context_prompt(self, context: Dict[str, Any]) -> str:
         """
@@ -341,23 +284,105 @@ Answer:"""
         
         return response
     
+    def _get_recommendations(self, context: Dict[str, Any]) -> str:
+        """
+        Provide data analysis recommendations
+        """
+        recommendations = []
+        shape = context.get('shape', (0, 0))
+        missing_values = context.get('missing_values', {})
+        
+        # Missing value recommendations
+        high_missing = [(col, count) for col, count in missing_values.items() if count > shape[0] * 0.3]
+        if high_missing:
+            recommendations.append(f"⚠️ **Data Quality**: Consider handling missing values in {len(high_missing)} columns with >30% missing data")
+        
+        # Correlation recommendations
+        recommendations.append("📊 **Analysis**: Start by exploring the correlation heatmap to identify relationships between numerical variables")
+        
+        # Visualization recommendations
+        numerical_count = sum(1 for dtype in context.get('dtypes', {}).values() if 'int' in str(dtype) or 'float' in str(dtype))
+        if numerical_count > 0:
+            recommendations.append(f"📈 **Visualizations**: Create distribution plots for your {numerical_count} numerical columns to understand their patterns")
+        
+        response = "💡 **Recommended Next Steps:**\n\n" + "\n\n".join(recommendations)
+        return response
+    
+    def _get_outlier_info(self, context: Dict[str, Any]) -> str:
+        """
+        Provide outlier detection information
+        """
+        return """🔍 **Outlier Detection:**
+
+To detect outliers in your dataset:
+
+1. **Use Box Plots**: Navigate to the Visualize tab and create box plots for numerical columns. Outliers appear as individual points beyond the whiskers.
+
+2. **IQR Method**: The cleaning process automatically detects outliers using the Interquartile Range (IQR) method and caps them to maintain data integrity.
+
+3. **Visual Inspection**: Look for extreme values in your distribution plots that are far from the main data cluster.
+
+Outliers can indicate:
+- Data entry errors
+- Rare but valid observations  
+- Special cases requiring investigation
+
+Would you like to explore specific columns for outliers?"""
+    
+    def _get_data_quality_info(self, context: Dict[str, Any]) -> str:
+        """
+        Provide data quality assessment
+        """
+        shape = context.get('shape', (0, 0))
+        missing_values = context.get('missing_values', {})
+        
+        total_missing = sum(missing_values.values())
+        missing_pct = (total_missing / (shape[0] * shape[1]) * 100) if shape[0] * shape[1] > 0 else 0
+        
+        response = "✅ **Data Quality Assessment:**\n\n"
+        
+        # Overall quality score
+        if missing_pct < 5:
+            response += f"**Overall Quality**: Excellent ({missing_pct:.1f}% missing data)\n\n"
+        elif missing_pct < 15:
+            response += f"**Overall Quality**: Good ({missing_pct:.1f}% missing data)\n\n"
+        elif missing_pct < 30:
+            response += f"**Overall Quality**: Fair ({missing_pct:.1f}% missing data)\n\n"
+        else:
+            response += f"**Overall Quality**: Needs improvement ({missing_pct:.1f}% missing data)\n\n"
+        
+        # Completeness
+        complete_cols = [col for col, count in missing_values.items() if count == 0]
+        response += f"**Completeness**: {len(complete_cols)}/{shape[1]} columns are complete\n\n"
+        
+        # Recommendations
+        if missing_pct > 15:
+            response += "**Recommendation**: Use the Clean tab to handle missing values before analysis"
+        else:
+            response += "**Status**: Your data is ready for analysis!"
+        
+        return response
+    
     def _get_general_help(self, context: Dict[str, Any]) -> str:
         """
         Provide general help
         """
-        return """🤖 **How I can help you analyze your data:**
+        return """🤖 **AI Data Assistant - How I Can Help:**
 
 I can answer questions about:
-- Dataset overview and structure
-- Missing values and data quality
-- Column information and data types  
-- Basic statistics and summaries
-- Recommendations for analysis
+- 📊 Dataset overview and structure
+- 🔍 Missing values and data quality
+- 📋 Column information and data types  
+- 📈 Basic statistics and distributions
+- 🔗 Correlations and relationships
+- ⚠️ Outliers and anomalies
+- 💡 Analysis recommendations
 
-**Example questions you can ask:**
+**Example questions:**
 - "What are the main characteristics of this dataset?"
-- "Which columns have missing values?"
-- "What data types are in my dataset?"
-- "Can you summarize the key features?"
+- "Which columns have the most missing values?"
+- "What correlations exist in my data?"
+- "What should I analyze first?"
+- "Tell me about data quality issues"
 
-Feel free to ask me anything about your data!"""
+**Pro tip**: Ask complex questions like "What are the data quality issues and what should I do about them?" for comprehensive insights!"""

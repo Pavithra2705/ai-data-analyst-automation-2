@@ -15,6 +15,10 @@ from data_cleaner import DataCleaner
 from visualizer import DataVisualizer
 from chatbot import LLaMAChat
 from insights_generator import InsightsGenerator
+from advanced_stats import AdvancedStatistics
+from transformation_pipeline import TransformationPipeline
+from pdf_report import PDFReportGenerator
+from data_versioning import DataVersioning
 from utils import FileHandler, download_button_with_data
 
 # Page config
@@ -36,6 +40,12 @@ if 'insights' not in st.session_state:
     st.session_state.insights = None
 if 'chatbot' not in st.session_state:
     st.session_state.chatbot = None
+if 'transformation_pipeline' not in st.session_state:
+    st.session_state.transformation_pipeline = TransformationPipeline()
+if 'transformed_data' not in st.session_state:
+    st.session_state.transformed_data = None
+if 'data_versioning' not in st.session_state:
+    st.session_state.data_versioning = DataVersioning()
 
 # Initialize components
 @st.cache_resource
@@ -64,7 +74,7 @@ def main():
         st.markdown("- Use the chat feature to ask questions about your data")
 
     # Main tabs
-    tab1, tab2, tab3, tab4, tab5 = st.tabs(["📤 Upload", "🧹 Clean", "📈 Insights", "📊 Visualize", "💬 Chat"])
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs(["📤 Upload", "🧹 Clean", "📈 Insights", "📊 Visualize", "🔬 Advanced Stats", "🔄 Transform", "💬 Chat"])
     
     with tab1:
         upload_tab()
@@ -79,6 +89,12 @@ def main():
         visualization_tab()
     
     with tab5:
+        advanced_stats_tab()
+    
+    with tab6:
+        transformation_pipeline_tab()
+    
+    with tab7:
         chat_tab()
 
 def upload_tab():
@@ -86,9 +102,9 @@ def upload_tab():
     
     # File uploader
     uploaded_file = st.file_uploader(
-        "Choose a CSV or XLSX file",
-        type=['csv', 'xlsx', 'xls'],
-        help="Maximum file size: 100MB",
+        "Choose a data file",
+        type=['csv', 'xlsx', 'xls', 'json', 'parquet'],
+        help="Supported formats: CSV, Excel, JSON, Parquet (Maximum file size: 100MB)",
         accept_multiple_files=False
     )
     
@@ -104,10 +120,27 @@ def upload_tab():
             
             # Load data
             with st.spinner("Loading data..."):
-                if uploaded_file.name.endswith('.csv'):
-                    df = pd.read_csv(uploaded_file)
-                else:
-                    df = pd.read_excel(uploaded_file)
+                try:
+                    if uploaded_file.name.endswith('.csv'):
+                        df = pd.read_csv(uploaded_file)
+                    elif uploaded_file.name.endswith(('.xlsx', '.xls')):
+                        df = pd.read_excel(uploaded_file)
+                    elif uploaded_file.name.endswith('.json'):
+                        df = pd.read_json(uploaded_file)
+                    elif uploaded_file.name.endswith('.parquet'):
+                        df = pd.read_parquet(uploaded_file)
+                    else:
+                        st.error("Unsupported file format")
+                        return
+                except ImportError as ie:
+                    if 'parquet' in str(ie).lower() or 'pyarrow' in str(ie).lower():
+                        st.error("⚠️ Parquet format requires pyarrow package. Please ensure it's installed in your environment.")
+                    else:
+                        st.error(f"Missing dependency: {str(ie)}")
+                    return
+                except Exception as load_error:
+                    st.error(f"Error loading file: {str(load_error)}")
+                    return
                 
                 st.session_state.uploaded_data = df
                 st.success(f"✅ Successfully loaded {df.shape[0]} rows and {df.shape[1]} columns!")
@@ -169,6 +202,11 @@ def cleaning_tab():
         with st.spinner("Cleaning data..."):
             cleaner = DataCleaner()
             
+            # Create version before cleaning
+            versioning = st.session_state.data_versioning
+            if versioning.get_version_count() == 0:
+                versioning.create_version(df, "Original uploaded data", {"source": "upload"})
+            
             # Perform cleaning
             cleaned_df, report = cleaner.clean_data(
                 df,
@@ -178,10 +216,19 @@ def cleaning_tab():
                 normalize=normalize_data
             )
             
+            # Create version after cleaning
+            cleaning_desc = f"Cleaned data (duplicates:{remove_duplicates}, missing:{handle_missing}, outliers:{detect_outliers})"
+            versioning.create_version(cleaned_df, cleaning_desc, {
+                "remove_duplicates": remove_duplicates,
+                "missing_strategy": handle_missing,
+                "detect_outliers": detect_outliers,
+                "normalize": normalize_data
+            })
+            
             st.session_state.cleaned_data = cleaned_df
             st.session_state.cleaning_report = report
             
-            st.success("✅ Data cleaning completed!")
+            st.success("✅ Data cleaning completed and version saved!")
     
     # Show cleaning results
     if st.session_state.cleaned_data is not None and st.session_state.cleaning_report is not None:
@@ -217,12 +264,12 @@ def cleaning_tab():
         
         # Download cleaned data
         st.subheader("💾 Download Cleaned Dataset")
-        col1, col2 = st.columns(2)
+        col1, col2, col3 = st.columns(3)
         
         with col1:
             csv_data = cleaned_df.to_csv(index=False)
             st.download_button(
-                label="📥 Download as CSV",
+                label="📥 Download CSV",
                 data=csv_data,
                 file_name=f"cleaned_data_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
                 mime="text/csv"
@@ -236,15 +283,76 @@ def cleaning_tab():
             excel_data = buffer.getvalue()
             
             st.download_button(
-                label="📥 Download as Excel",
+                label="📥 Download Excel",
                 data=excel_data,
                 file_name=f"cleaned_data_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
         
+        with col3:
+            # Parquet download
+            parquet_buffer = io.BytesIO()
+            cleaned_df.to_parquet(parquet_buffer, index=False)
+            st.download_button(
+                label="📥 Download Parquet",
+                data=parquet_buffer.getvalue(),
+                file_name=f"cleaned_data_{datetime.now().strftime('%Y%m%d_%H%M%S')}.parquet",
+                mime="application/octet-stream"
+            )
+        
         # Preview cleaned data
         st.subheader("👀 Cleaned Data Preview")
         st.dataframe(cleaned_df.head(10), use_container_width=True)
+    
+    # Version History
+    versioning = st.session_state.data_versioning
+    if versioning.get_version_count() > 0:
+        st.markdown("---")
+        st.subheader("🕐 Version History")
+        
+        history = versioning.get_version_history()
+        
+        # Display versions in a table
+        history_df = pd.DataFrame(history)
+        st.dataframe(history_df, use_container_width=True)
+        
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            # Rollback
+            version_ids = [v['version_id'] for v in history]
+            selected_version = st.selectbox("Rollback to version:", version_ids, key="rollback_version")
+            
+            if st.button("⏮️ Rollback", type="secondary"):
+                with st.spinner("Rolling back..."):
+                    rolled_back_df, version_info = versioning.rollback(selected_version)
+                    if rolled_back_df is not None:
+                        st.session_state.cleaned_data = rolled_back_df
+                        st.success(f"✅ Rolled back to version {selected_version}: {version_info['action']}")
+                        st.rerun()
+                    else:
+                        st.error("Failed to rollback")
+        
+        with col2:
+            # Compare versions
+            if len(version_ids) >= 2:
+                v1 = st.selectbox("Compare version 1:", version_ids, key="compare_v1")
+                v2 = st.selectbox("Compare version 2:", version_ids, index=min(1, len(version_ids)-1), key="compare_v2")
+                
+                if st.button("🔄 Compare", type="secondary"):
+                    comparison = versioning.compare_versions(v1, v2)
+                    if comparison:
+                        st.json(comparison)
+        
+        with col3:
+            # Export history
+            history_json = versioning.export_version_history()
+            st.download_button(
+                label="📥 Export History",
+                data=history_json,
+                file_name=f"version_history_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
+                mime="application/json"
+            )
 
 def insights_tab():
     st.header("📈 Statistical Insights")
@@ -326,6 +434,30 @@ def insights_tab():
                         st.write(f"**{key}:** {value}")
                 else:
                     st.write(insight_data)
+        
+        # Generate PDF Report
+        st.markdown("---")
+        st.subheader("📄 Generate Report")
+        
+        if st.button("📥 Generate PDF Report", type="primary"):
+            with st.spinner("Generating PDF report..."):
+                try:
+                    pdf_gen = PDFReportGenerator()
+                    pdf_data = pdf_gen.generate_report(
+                        df,
+                        cleaning_report=st.session_state.cleaning_report,
+                        insights=insights
+                    )
+                    
+                    st.download_button(
+                        label="📥 Download PDF Report",
+                        data=pdf_data,
+                        file_name=f"data_analysis_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf",
+                        mime="application/pdf"
+                    )
+                    st.success("✅ PDF report generated successfully!")
+                except Exception as e:
+                    st.error(f"Error generating PDF: {str(e)}")
 
 def visualization_tab():
     st.header("📊 Data Visualizations")
@@ -344,6 +476,8 @@ def visualization_tab():
         "Select visualization type",
         ["Distribution Plot", "Scatter Plot", "Box Plot", "Bar Chart", "Time Series", "Correlation Heatmap"]
     )
+    
+    fig = None  # Store the current figure for export
     
     if viz_type == "Distribution Plot":
         col = st.selectbox("Select column", df.select_dtypes(include=[np.number]).columns)
@@ -404,6 +538,471 @@ def visualization_tab():
             st.plotly_chart(fig, use_container_width=True)
         else:
             st.warning("Need at least 2 numerical columns for correlation heatmap.")
+    
+    # Export functionality
+    if fig is not None:
+        st.markdown("---")
+        st.subheader("💾 Export Visualization")
+        
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            # Export as PNG
+            try:
+                img_bytes = fig.to_image(format="png", engine="kaleido", width=1200, height=800)
+                st.download_button(
+                    label="📥 Download PNG",
+                    data=img_bytes,
+                    file_name=f"{viz_type.lower().replace(' ', '_')}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png",
+                    mime="image/png"
+                )
+            except Exception as e:
+                st.error(f"PNG export error: {str(e)}")
+        
+        with col2:
+            # Export as SVG
+            try:
+                svg_bytes = fig.to_image(format="svg", engine="kaleido", width=1200, height=800)
+                st.download_button(
+                    label="📥 Download SVG",
+                    data=svg_bytes,
+                    file_name=f"{viz_type.lower().replace(' ', '_')}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.svg",
+                    mime="image/svg+xml"
+                )
+            except Exception as e:
+                st.error(f"SVG export error: {str(e)}")
+        
+        with col3:
+            # Export as HTML (interactive)
+            html_str = fig.to_html(include_plotlyjs='cdn')
+            st.download_button(
+                label="📥 Download HTML",
+                data=html_str,
+                file_name=f"{viz_type.lower().replace(' ', '_')}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.html",
+                mime="text/html"
+            )
+
+def advanced_stats_tab():
+    st.header("🔬 Advanced Statistical Analysis")
+    
+    if st.session_state.cleaned_data is None:
+        st.warning("Please clean your data first in the Clean tab.")
+        return
+    
+    df = st.session_state.cleaned_data
+    adv_stats = AdvancedStatistics()
+    
+    # Analysis type selection
+    analysis_type = st.selectbox(
+        "Select Analysis Type",
+        ["Regression Analysis", "Hypothesis Testing", "Anomaly Detection", "Distribution Analysis"]
+    )
+    
+    if analysis_type == "Regression Analysis":
+        st.subheader("📊 Linear Regression Analysis")
+        
+        numerical_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+        
+        if len(numerical_cols) < 2:
+            st.warning("Need at least 2 numerical columns for regression analysis.")
+            return
+        
+        target_col = st.selectbox("Select Target Variable (Y)", numerical_cols)
+        
+        feature_options = [col for col in numerical_cols if col != target_col]
+        feature_cols = st.multiselect("Select Feature Variables (X)", feature_options, default=feature_options[:3] if len(feature_options) >= 3 else feature_options)
+        
+        if st.button("Run Regression Analysis", type="primary"):
+            with st.spinner("Analyzing..."):
+                results = adv_stats.perform_regression_analysis(df, target_col, feature_cols)
+                
+                if 'error' in results:
+                    st.error(results['error'])
+                else:
+                    st.success("✅ Regression analysis complete!")
+                    
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        st.metric("R-squared", f"{results['r_squared']:.4f}")
+                    with col2:
+                        st.metric("RMSE", f"{results['rmse']:.4f}")
+                    with col3:
+                        st.metric("MAE", f"{results['mean_absolute_error']:.4f}")
+                    
+                    st.subheader("Feature Coefficients")
+                    coef_df = pd.DataFrame(results['coefficients'])
+                    st.dataframe(coef_df[['Feature', 'Coefficient']], use_container_width=True)
+                    
+                    # Interpretation
+                    st.subheader("📝 Interpretation")
+                    if results['r_squared'] > 0.7:
+                        st.success(f"Strong model fit (R² = {results['r_squared']:.3f}). The model explains {results['r_squared']*100:.1f}% of the variance.")
+                    elif results['r_squared'] > 0.4:
+                        st.info(f"Moderate model fit (R² = {results['r_squared']:.3f}). The model explains {results['r_squared']*100:.1f}% of the variance.")
+                    else:
+                        st.warning(f"Weak model fit (R² = {results['r_squared']:.3f}). Consider adding more relevant features.")
+    
+    elif analysis_type == "Hypothesis Testing":
+        st.subheader("🧪 Hypothesis Testing")
+        
+        all_cols = df.columns.tolist()
+        
+        col1 = st.selectbox("Select First Variable", all_cols)
+        
+        test_type = st.radio("Test Type", ["Single Variable Analysis", "Two Variable Comparison"])
+        
+        col2 = None
+        if test_type == "Two Variable Comparison":
+            remaining_cols = [c for c in all_cols if c != col1]
+            col2 = st.selectbox("Select Second Variable", remaining_cols)
+        
+        if st.button("Run Hypothesis Test", type="primary"):
+            with st.spinner("Testing..."):
+                results = adv_stats.perform_hypothesis_tests(df, col1, col2)
+                
+                if 'error' in results:
+                    st.error(results['error'])
+                else:
+                    st.success("✅ Hypothesis tests complete!")
+                    
+                    for test_name, test_results in results.items():
+                        with st.expander(f"📊 {test_results['test']}", expanded=True):
+                            col_a, col_b = st.columns(2)
+                            with col_a:
+                                st.metric("Test Statistic", f"{test_results['statistic']:.4f}")
+                            with col_b:
+                                st.metric("P-value", f"{test_results['p_value']:.4f}")
+                            
+                            if 'significant' in test_results:
+                                if test_results['significant']:
+                                    st.success(f"✅ {test_results['interpretation']} (p < 0.05)")
+                                else:
+                                    st.info(f"ℹ️ {test_results['interpretation']} (p ≥ 0.05)")
+                            else:
+                                st.info(test_results['interpretation'])
+    
+    elif analysis_type == "Anomaly Detection":
+        st.subheader("🔍 Anomaly Detection")
+        
+        numerical_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+        
+        if len(numerical_cols) == 0:
+            st.warning("No numerical columns available for anomaly detection.")
+            return
+        
+        selected_cols = st.multiselect("Select Columns for Analysis", numerical_cols, default=numerical_cols[:3] if len(numerical_cols) >= 3 else numerical_cols)
+        
+        method = st.selectbox("Detection Method", ["Isolation Forest", "Statistical (Z-score)", "DBSCAN Clustering"])
+        
+        method_map = {
+            "Isolation Forest": "isolation_forest",
+            "Statistical (Z-score)": "statistical",
+            "DBSCAN Clustering": "dbscan"
+        }
+        
+        contamination = st.slider("Expected Contamination Rate", 0.01, 0.3, 0.1, 0.01) if method == "Isolation Forest" else 0.1
+        
+        if st.button("Detect Anomalies", type="primary"):
+            with st.spinner("Detecting anomalies..."):
+                results = adv_stats.detect_anomalies(df, selected_cols, method_map[method], contamination)
+                
+                if 'error' in results:
+                    st.error(results['error'])
+                else:
+                    st.success("✅ Anomaly detection complete!")
+                    
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.metric("Total Anomalies", results['total_anomalies'])
+                    with col2:
+                        st.metric("Anomaly Rate", f"{results['anomaly_percentage']:.2f}%")
+                    
+                    st.subheader("📋 Sample Anomalies")
+                    if 'sample_anomalies' in results:
+                        st.dataframe(pd.DataFrame(results['sample_anomalies']), use_container_width=True)
+                    else:
+                        st.info("No anomalies detected.")
+                    
+                    st.info(f"**Method**: {results['method']}")
+    
+    elif analysis_type == "Distribution Analysis":
+        st.subheader("📈 Distribution Analysis")
+        
+        numerical_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+        
+        if len(numerical_cols) == 0:
+            st.warning("No numerical columns available for distribution analysis.")
+            return
+        
+        selected_col = st.selectbox("Select Column", numerical_cols)
+        
+        if st.button("Analyze Distribution", type="primary"):
+            with st.spinner("Analyzing distribution..."):
+                results = adv_stats.perform_distribution_analysis(df, selected_col)
+                
+                if 'error' in results:
+                    st.error(results['error'])
+                else:
+                    st.success("✅ Distribution analysis complete!")
+                    
+                    # Key metrics
+                    st.subheader("📊 Key Statistics")
+                    col1, col2, col3, col4 = st.columns(4)
+                    with col1:
+                        st.metric("Mean", f"{results['mean']:.2f}")
+                        st.metric("Std Dev", f"{results['std']:.2f}")
+                    with col2:
+                        st.metric("Median", f"{results['median']:.2f}")
+                        st.metric("IQR", f"{results['iqr']:.2f}")
+                    with col3:
+                        st.metric("Skewness", f"{results['skewness']:.2f}")
+                        st.metric("Kurtosis", f"{results['kurtosis']:.2f}")
+                    with col4:
+                        st.metric("Min", f"{results['min']:.2f}")
+                        st.metric("Max", f"{results['max']:.2f}")
+                    
+                    # Shape and behavior
+                    st.subheader("📐 Distribution Characteristics")
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.info(f"**Shape**: {results['shape']}")
+                    with col2:
+                        st.info(f"**Tail Behavior**: {results['tail_behavior']}")
+                    
+                    # Normality
+                    if 'normality_test' in results:
+                        if results['normality_test']['is_normal']:
+                            st.success(f"✅ Data is normally distributed (p = {results['normality_test']['p_value']:.4f})")
+                        else:
+                            st.warning(f"⚠️ Data is not normally distributed (p = {results['normality_test']['p_value']:.4f})")
+                    
+                    # Outliers
+                    st.subheader("🔍 Outlier Information")
+                    st.metric("Outlier Count", f"{results['outliers']['count']} ({results['outliers']['percentage']:.1f}%)")
+                    st.info(f"Outlier bounds: [{results['outliers']['lower_bound']:.2f}, {results['outliers']['upper_bound']:.2f}]")
+
+def transformation_pipeline_tab():
+    st.header("🔄 Custom Data Transformation Pipeline")
+    
+    if st.session_state.cleaned_data is None:
+        st.warning("Please clean your data first in the Clean tab.")
+        return
+    
+    df = st.session_state.cleaned_data
+    pipeline = st.session_state.transformation_pipeline
+    
+    # Pipeline builder
+    st.subheader("🛠️ Build Your Pipeline")
+    
+    transform_type = st.selectbox(
+        "Select Transformation Type",
+        [
+            "Filter Rows", "Select Columns", "Drop Columns", "Rename Column",
+            "Create Column", "Fill Missing Values", "Replace Values", "Convert Data Type",
+            "Sort Data", "Group & Aggregate", "Bin Column", "Normalize Column", "Extract DateTime"
+        ]
+    )
+    
+    # Parameters based on transformation type
+    params = {}
+    
+    if transform_type == "Filter Rows":
+        col1, col2 = st.columns(2)
+        with col1:
+            params['column'] = st.selectbox("Column", df.columns.tolist())
+        with col2:
+            params['operator'] = st.selectbox("Operator", ["equals", "not_equals", "greater_than", "less_than", "contains", "not_contains", "is_null", "not_null"])
+        if params['operator'] not in ['is_null', 'not_null']:
+            params['value'] = st.text_input("Value")
+    
+    elif transform_type == "Select Columns":
+        params['columns'] = st.multiselect("Select Columns to Keep", df.columns.tolist())
+    
+    elif transform_type == "Drop Columns":
+        params['columns'] = st.multiselect("Select Columns to Drop", df.columns.tolist())
+    
+    elif transform_type == "Rename Column":
+        col1, col2 = st.columns(2)
+        with col1:
+            params['old_name'] = st.selectbox("Original Column", df.columns.tolist())
+        with col2:
+            params['new_name'] = st.text_input("New Name")
+    
+    elif transform_type == "Create Column":
+        params['name'] = st.text_input("New Column Name")
+        params['expression'] = st.text_input("Expression (e.g., 'col1 + col2' or column name)")
+        st.caption("Example: 'price * 1.1' or 'revenue - cost'")
+    
+    elif transform_type == "Fill Missing Values":
+        col1, col2 = st.columns(2)
+        with col1:
+            params['column'] = st.selectbox("Column", df.columns.tolist())
+        with col2:
+            params['method'] = st.selectbox("Method", ["value", "mean", "median", "mode", "forward_fill", "backward_fill"])
+        if params['method'] == 'value':
+            params['value'] = st.text_input("Fill Value")
+    
+    elif transform_type == "Replace Values":
+        params['column'] = st.selectbox("Column", df.columns.tolist())
+        col1, col2 = st.columns(2)
+        with col1:
+            params['old_value'] = st.text_input("Old Value")
+        with col2:
+            params['new_value'] = st.text_input("New Value")
+    
+    elif transform_type == "Convert Data Type":
+        col1, col2 = st.columns(2)
+        with col1:
+            params['column'] = st.selectbox("Column", df.columns.tolist())
+        with col2:
+            params['type'] = st.selectbox("New Type", ["int", "float", "string", "datetime", "category"])
+    
+    elif transform_type == "Sort Data":
+        params['columns'] = st.multiselect("Sort by Columns", df.columns.tolist())
+        params['ascending'] = st.checkbox("Ascending", value=True)
+    
+    elif transform_type == "Group & Aggregate":
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            params['group_by'] = st.selectbox("Group By", df.columns.tolist())
+        with col2:
+            numerical_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+            params['agg_column'] = st.selectbox("Aggregate Column", numerical_cols)
+        with col3:
+            params['agg_function'] = st.selectbox("Function", ["mean", "sum", "count", "min", "max"])
+    
+    elif transform_type == "Bin Column":
+        params['column'] = st.selectbox("Column", df.select_dtypes(include=[np.number]).columns.tolist())
+        params['bins'] = st.number_input("Number of Bins", min_value=2, max_value=20, value=5)
+    
+    elif transform_type == "Normalize Column":
+        col1, col2 = st.columns(2)
+        with col1:
+            params['column'] = st.selectbox("Column", df.select_dtypes(include=[np.number]).columns.tolist())
+        with col2:
+            params['method'] = st.selectbox("Method", ["minmax", "zscore"])
+    
+    elif transform_type == "Extract DateTime":
+        col1, col2 = st.columns(2)
+        with col1:
+            date_cols = df.select_dtypes(include=['datetime64']).columns.tolist()
+            if not date_cols:
+                date_cols = df.columns.tolist()
+            params['column'] = st.selectbox("DateTime Column", date_cols)
+        with col2:
+            params['component'] = st.selectbox("Extract", ["year", "month", "day", "dayofweek", "hour", "quarter"])
+    
+    # Add transformation to pipeline
+    if st.button("➕ Add to Pipeline", type="primary"):
+        transform_type_map = {
+            "Filter Rows": "filter_rows",
+            "Select Columns": "select_columns",
+            "Drop Columns": "drop_columns",
+            "Rename Column": "rename_column",
+            "Create Column": "create_column",
+            "Fill Missing Values": "fill_missing",
+            "Replace Values": "replace_values",
+            "Convert Data Type": "convert_type",
+            "Sort Data": "sort_data",
+            "Group & Aggregate": "group_aggregate",
+            "Bin Column": "bin_column",
+            "Normalize Column": "normalize_column",
+            "Extract DateTime": "extract_datetime"
+        }
+        
+        pipeline.add_transformation(transform_type_map[transform_type], params)
+        st.success(f"✅ Added '{transform_type}' to pipeline")
+        st.rerun()
+    
+    # Display current pipeline
+    st.markdown("---")
+    st.subheader("📋 Current Pipeline")
+    
+    summary = pipeline.get_pipeline_summary()
+    
+    if summary['total_steps'] == 0:
+        st.info("No transformations added yet. Add your first transformation above!")
+    else:
+        st.write(f"**Total Steps:** {summary['total_steps']}")
+        
+        for step in summary['transformations']:
+            with st.expander(f"Step {step['step']}: {step['type']}", expanded=False):
+                st.json(step['params'])
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            if st.button("🗑️ Clear Pipeline"):
+                pipeline.clear_pipeline()
+                st.success("Pipeline cleared!")
+                st.rerun()
+        
+        with col2:
+            pipeline_json = pipeline.export_pipeline()
+            st.download_button(
+                label="📥 Download Pipeline",
+                data=pipeline_json,
+                file_name=f"pipeline_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
+                mime="application/json"
+            )
+    
+    # Execute pipeline
+    st.markdown("---")
+    st.subheader("▶️ Execute Pipeline")
+    
+    if summary['total_steps'] > 0:
+        if st.button("🚀 Run Pipeline", type="primary"):
+            with st.spinner("Executing transformations..."):
+                try:
+                    transformed_df, execution_log = pipeline.apply_pipeline(df)
+                    st.session_state.transformed_data = transformed_df
+                    
+                    st.success(f"✅ Pipeline executed successfully!")
+                    
+                    # Show execution log
+                    st.subheader("📊 Execution Log")
+                    for log_entry in execution_log:
+                        if log_entry['status'] == 'success':
+                            st.success(f"Step {log_entry['step']} ({log_entry['type']}): {log_entry['before_shape']} → {log_entry['after_shape']}")
+                        else:
+                            st.error(f"Step {log_entry['step']} ({log_entry['type']}): {log_entry.get('error', 'Unknown error')}")
+                    
+                    # Show transformed data preview
+                    st.subheader("👀 Transformed Data Preview")
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.metric("Rows", transformed_df.shape[0])
+                    with col2:
+                        st.metric("Columns", transformed_df.shape[1])
+                    
+                    st.dataframe(transformed_df.head(10), use_container_width=True)
+                    
+                    # Download transformed data
+                    st.subheader("💾 Download Transformed Data")
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        csv_data = transformed_df.to_csv(index=False)
+                        st.download_button(
+                            label="📥 Download CSV",
+                            data=csv_data,
+                            file_name=f"transformed_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                            mime="text/csv"
+                        )
+                    
+                    with col2:
+                        buffer = io.BytesIO()
+                        with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
+                            transformed_df.to_excel(writer, index=False)
+                        st.download_button(
+                            label="📥 Download Excel",
+                            data=buffer.getvalue(),
+                            file_name=f"transformed_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                        )
+                
+                except Exception as e:
+                    st.error(f"Pipeline execution failed: {str(e)}")
 
 def chat_tab():
     st.header("💬 Chat with Your Data")
@@ -414,13 +1013,12 @@ def chat_tab():
     
     # Initialize chatbot
     if st.session_state.chatbot is None:
-        with st.spinner("Loading AI chatbot... This may take a moment."):
+        with st.spinner("Loading AI assistant..."):
             try:
                 st.session_state.chatbot = load_chatbot()
-                st.success("✅ Chatbot loaded successfully!")
+                st.success("✅ AI assistant ready!")
             except Exception as e:
                 st.error(f"Failed to load chatbot: {str(e)}")
-                st.info("The chatbot feature requires additional model downloads. You can still use other features of the application.")
                 return
     
     df = st.session_state.cleaned_data
