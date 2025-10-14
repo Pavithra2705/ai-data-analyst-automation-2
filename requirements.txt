@@ -1,0 +1,28 @@
+# Core framework
+streamlit
+flask
+
+# Data manipulation and analysis
+pandas
+numpy
+openpyxl
+XlsxWriter
+
+# Machine learning and preprocessing
+scikit-learn
+
+# Visualization
+plotly
+kaleido
+matplotlib
+seaborn
+
+# PDF generation and reporting
+reportlab
+
+# Environment variables
+python-dotenv
+
+# File handling / utilities
+requests
+tqdm

@@ -20,6 +20,7 @@ from transformation_pipeline import TransformationPipeline
 from pdf_report import PDFReportGenerator
 from data_versioning import DataVersioning
 from utils import FileHandler, download_button_with_data
+from visualizer import EfficientVisualizer  # Import the new class
 
 # Page config
 st.set_page_config(
@@ -467,121 +468,191 @@ def visualization_tab():
         return
     
     df = st.session_state.cleaned_data
-    visualizer = DataVisualizer(df)
     
-    # Visualization options
-    st.subheader("🎨 Create Visualizations")
-    
-    viz_type = st.selectbox(
-        "Select visualization type",
-        ["Distribution Plot", "Scatter Plot", "Box Plot", "Bar Chart", "Time Series", "Correlation Heatmap"]
+    # Add tab selection for dashboard vs individual charts
+    viz_mode = st.radio(
+        "Visualization Mode",
+        ["🎨 Interactive Dashboard", "📊 Individual Charts"],
+        horizontal=True
     )
     
-    fig = None  # Store the current figure for export
-    
-    if viz_type == "Distribution Plot":
-        col = st.selectbox("Select column", df.select_dtypes(include=[np.number]).columns)
-        if col:
-            fig = visualizer.create_histogram(col)
-            st.plotly_chart(fig, use_container_width=True)
-    
-    elif viz_type == "Scatter Plot":
-        numerical_cols = df.select_dtypes(include=[np.number]).columns
-        if len(numerical_cols) >= 2:
-            col1, col2 = st.columns(2)
-            with col1:
-                x_col = st.selectbox("X-axis", numerical_cols)
-            with col2:
-                y_col = st.selectbox("Y-axis", numerical_cols)
-            
-            if x_col and y_col:
-                fig = visualizer.create_scatter_plot(x_col, y_col)
-                st.plotly_chart(fig, use_container_width=True)
-    
-    elif viz_type == "Box Plot":
-        col = st.selectbox("Select column", df.select_dtypes(include=[np.number]).columns)
-        if col:
-            fig = visualizer.create_box_plot(col)
-            st.plotly_chart(fig, use_container_width=True)
-    
-    elif viz_type == "Bar Chart":
-        col = st.selectbox("Select column", df.select_dtypes(include=['object', 'category']).columns)
-        if col:
-            fig = visualizer.create_bar_chart(col)
-            st.plotly_chart(fig, use_container_width=True)
-    
-    elif viz_type == "Time Series":
-        date_cols = df.select_dtypes(include=['datetime64']).columns
-        if len(date_cols) == 0:
-            # Try to find columns that might be dates
-            potential_date_cols = [col for col in df.columns if 'date' in col.lower() or 'time' in col.lower()]
-            if potential_date_cols:
-                st.info("No datetime columns found. Try converting these columns to datetime first:")
-                st.write(potential_date_cols)
-            else:
-                st.warning("No datetime columns found in the dataset.")
-        else:
-            col1, col2 = st.columns(2)
-            with col1:
-                date_col = st.selectbox("Date column", date_cols)
-            with col2:
-                value_col = st.selectbox("Value column", df.select_dtypes(include=[np.number]).columns)
-            
-            if date_col and value_col:
-                fig = visualizer.create_time_series(date_col, value_col)
-                st.plotly_chart(fig, use_container_width=True)
-    
-    elif viz_type == "Correlation Heatmap":
-        numerical_cols = df.select_dtypes(include=[np.number]).columns
-        if len(numerical_cols) > 1:
-            fig = visualizer.create_correlation_heatmap()
-            st.plotly_chart(fig, use_container_width=True)
-        else:
-            st.warning("Need at least 2 numerical columns for correlation heatmap.")
-    
-    # Export functionality
-    if fig is not None:
+    if viz_mode == "🎨 Interactive Dashboard":
         st.markdown("---")
-        st.subheader("💾 Export Visualization")
+        st.subheader("🎨 Comprehensive Dashboard")
+        st.info("📊 Auto-generated dashboard with multiple chart types based on your data")
         
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            # Export as PNG
-            try:
-                img_bytes = fig.to_image(format="png", engine="kaleido", width=1200, height=800)
+        try:
+            # Create the efficient visualizer
+            efficient_viz = EfficientVisualizer(df)
+            
+            # Generate and display dashboard
+            with st.spinner("Generating interactive dashboard..."):
+                dashboard_fig = efficient_viz.create_dashboard()
+                st.plotly_chart(dashboard_fig, use_container_width=True)
+            
+            st.success("✅ Dashboard generated successfully!")
+            
+            # Export dashboard
+            st.markdown("---")
+            st.subheader("💾 Export Dashboard")
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                # Export as HTML (always works)
+                html_str = dashboard_fig.to_html(include_plotlyjs='cdn')
                 st.download_button(
-                    label="📥 Download PNG",
-                    data=img_bytes,
-                    file_name=f"{viz_type.lower().replace(' ', '_')}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png",
-                    mime="image/png"
+                    label="📥 Download Interactive HTML",
+                    data=html_str,
+                    file_name=f"dashboard_{datetime.now().strftime('%Y%m%d_%H%M%S')}.html",
+                    mime="text/html",
+                    help="Download as interactive HTML file (recommended)"
                 )
-            except Exception as e:
-                st.error(f"PNG export error: {str(e)}")
-        
-        with col2:
-            # Export as SVG
-            try:
-                svg_bytes = fig.to_image(format="svg", engine="kaleido", width=1200, height=800)
+            
+            with col2:
+                # Export as JSON (for later reuse)
+                json_str = dashboard_fig.to_json()
                 st.download_button(
-                    label="📥 Download SVG",
-                    data=svg_bytes,
-                    file_name=f"{viz_type.lower().replace(' ', '_')}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.svg",
-                    mime="image/svg+xml"
+                    label="📥 Download JSON",
+                    data=json_str,
+                    file_name=f"dashboard_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
+                    mime="application/json",
+                    help="Download chart configuration as JSON"
                 )
-            except Exception as e:
-                st.error(f"SVG export error: {str(e)}")
+            
+        except Exception as e:
+            st.error(f"Error generating dashboard: {str(e)}")
+            st.info("💡 Try using 'Individual Charts' mode instead")
+    
+    else:  # Individual Charts mode
+        visualizer = DataVisualizer(df)
         
-        with col3:
-            # Export as HTML (interactive)
-            html_str = fig.to_html(include_plotlyjs='cdn')
-            st.download_button(
-                label="📥 Download HTML",
-                data=html_str,
-                file_name=f"{viz_type.lower().replace(' ', '_')}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.html",
-                mime="text/html"
-            )
-
+        # Visualization options
+        st.subheader("🎨 Create Individual Visualizations")
+        
+        viz_type = st.selectbox(
+            "Select visualization type",
+            ["Distribution Plot", "Scatter Plot", "Box Plot", "Bar Chart", "Time Series", "Correlation Heatmap"]
+        )
+        
+        fig = None  # Store the current figure for export
+        
+        if viz_type == "Distribution Plot":
+            col = st.selectbox("Select column", df.select_dtypes(include=[np.number]).columns)
+            if col:
+                fig = visualizer.create_histogram(col)
+                st.plotly_chart(fig, use_container_width=True)
+        
+        elif viz_type == "Scatter Plot":
+            numerical_cols = df.select_dtypes(include=[np.number]).columns
+            if len(numerical_cols) >= 2:
+                col1, col2 = st.columns(2)
+                with col1:
+                    x_col = st.selectbox("X-axis", numerical_cols)
+                with col2:
+                    y_col = st.selectbox("Y-axis", numerical_cols)
+                
+                if x_col and y_col:
+                    fig = visualizer.create_scatter_plot(x_col, y_col)
+                    st.plotly_chart(fig, use_container_width=True)
+        
+        elif viz_type == "Box Plot":
+            col = st.selectbox("Select column", df.select_dtypes(include=[np.number]).columns)
+            if col:
+                fig = visualizer.create_box_plot(col)
+                st.plotly_chart(fig, use_container_width=True)
+        
+        elif viz_type == "Bar Chart":
+            col = st.selectbox("Select column", df.select_dtypes(include=['object', 'category']).columns)
+            if col:
+                fig = visualizer.create_bar_chart(col)
+                st.plotly_chart(fig, use_container_width=True)
+        
+        elif viz_type == "Time Series":
+            date_cols = df.select_dtypes(include=['datetime64']).columns
+            if len(date_cols) == 0:
+                # Try to find columns that might be dates
+                potential_date_cols = [col for col in df.columns if 'date' in col.lower() or 'time' in col.lower()]
+                if potential_date_cols:
+                    st.info("No datetime columns found. Try converting these columns to datetime first:")
+                    st.write(potential_date_cols)
+                else:
+                    st.warning("No datetime columns found in the dataset.")
+            else:
+                col1, col2 = st.columns(2)
+                with col1:
+                    date_col = st.selectbox("Date column", date_cols)
+                with col2:
+                    value_col = st.selectbox("Value column", df.select_dtypes(include=[np.number]).columns)
+                
+                if date_col and value_col:
+                    fig = visualizer.create_time_series(date_col, value_col)
+                    st.plotly_chart(fig, use_container_width=True)
+        
+        elif viz_type == "Correlation Heatmap":
+            numerical_cols = df.select_dtypes(include=[np.number]).columns
+            if len(numerical_cols) > 1:
+                fig = visualizer.create_correlation_heatmap()
+                st.plotly_chart(fig, use_container_width=True)
+            else:
+                st.warning("Need at least 2 numerical columns for correlation heatmap.")
+        
+        # Export functionality for individual charts
+        if fig is not None:
+            st.markdown("---")
+            st.subheader("💾 Export Visualization")
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                # Export as HTML (always works, no dependencies)
+                html_str = fig.to_html(include_plotlyjs='cdn')
+                st.download_button(
+                    label="📥 Download HTML (Interactive)",
+                    data=html_str,
+                    file_name=f"{viz_type.lower().replace(' ', '_')}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.html",
+                    mime="text/html",
+                    help="Interactive HTML file - works in any browser"
+                )
+            
+            with col2:
+                # Export as JSON
+                json_str = fig.to_json()
+                st.download_button(
+                    label="📥 Download JSON",
+                    data=json_str,
+                    file_name=f"{viz_type.lower().replace(' ', '_')}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
+                    mime="application/json",
+                    help="Chart configuration as JSON"
+                )
+            
+            # Optional: Try PNG/SVG export (only if Kaleido is available)
+            st.markdown("**🖼️ Static Image Export** (requires Chrome/Kaleido)")
+            col3, col4 = st.columns(2)
+            
+            with col3:
+                try:
+                    img_bytes = fig.to_image(format="png", engine="kaleido", width=1200, height=800)
+                    st.download_button(
+                        label="📥 Download PNG",
+                        data=img_bytes,
+                        file_name=f"{viz_type.lower().replace(' ', '_')}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png",
+                        mime="image/png"
+                    )
+                except Exception as e:
+                    st.caption(f"⚠️ PNG export unavailable: {str(e)[:50]}...")
+            
+            with col4:
+                try:
+                    svg_bytes = fig.to_image(format="svg", engine="kaleido", width=1200, height=800)
+                    st.download_button(
+                        label="📥 Download SVG",
+                        data=svg_bytes,
+                        file_name=f"{viz_type.lower().replace(' ', '_')}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.svg",
+                        mime="image/svg+xml"
+                    )
+                except Exception as e:
+                    st.caption(f"⚠️ SVG export unavailable: {str(e)[:50]}...") 
 def advanced_stats_tab():
     st.header("🔬 Advanced Statistical Analysis")
     
