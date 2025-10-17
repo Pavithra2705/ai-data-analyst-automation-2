@@ -24,7 +24,7 @@ from visualizer import EfficientVisualizer  # Import the new class
 
 # Page config
 st.set_page_config(
-    page_title="AutoDataAnalyst",
+    page_title="DATAVERSE AI",
     page_icon="📊",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -54,7 +54,7 @@ def load_chatbot():
     return LLaMAChat()
 
 def main():
-    st.title("🤖 AutoDataAnalyst")
+    st.title("🤖 DATAVERSE AI")
     st.markdown("### AI-Powered Data Cleaning, Insights, and Visualization Platform")
     
     # Sidebar
@@ -302,7 +302,7 @@ def cleaning_tab():
             )
         
         # Preview cleaned data
-        st.subheader("👀 Cleaned Data Preview")
+        st.subheader("Cleaned Data Preview")
         st.dataframe(cleaned_df.head(10), use_container_width=True)
     
     # Version History
@@ -714,7 +714,7 @@ def advanced_stats_tab():
                         st.warning(f"Weak model fit (R² = {results['r_squared']:.3f}). Consider adding more relevant features.")
     
     elif analysis_type == "Hypothesis Testing":
-        st.subheader("🧪 Hypothesis Testing")
+        st.subheader(" Hypothesis Testing")
         
         all_cols = df.columns.tolist()
         
