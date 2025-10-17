@@ -63,7 +63,7 @@ class DataCleaner:
     
     def _infer_and_convert_types(self, df):
         """
-        Automatically infer and convert data types
+        Automatically infer and convert data types with better handling for complex objects
         """
         report = {}
         converted_columns = []
@@ -71,8 +71,24 @@ class DataCleaner:
         for column in df.columns:
             original_dtype = str(df[column].dtype)
             
-            # Try to convert to datetime
+            # Handle complex objects from JSON (dicts, lists) by converting to strings FIRST
             if df[column].dtype == 'object':
+                try:
+                    # Check if column contains complex objects (dict, list)
+                    sample_val = df[column].dropna().iloc[0] if len(df[column].dropna()) > 0 else None
+                    if sample_val is not None and isinstance(sample_val, (dict, list)):
+                        df[column] = df[column].apply(lambda x: str(x) if isinstance(x, (dict, list)) else x)
+                        converted_columns.append({
+                            'column': column,
+                            'from': original_dtype,
+                            'to': 'string (from complex object)'
+                        })
+                        continue
+                except Exception as e:
+                    # If there's any issue, convert to string as fallback
+                    df[column] = df[column].astype(str)
+                    continue
+                
                 # Check if it looks like a date
                 sample_values = df[column].dropna().head(100)
                 if len(sample_values) > 0:
@@ -98,10 +114,11 @@ class DataCleaner:
                                     'to': str(df[column].dtype)
                                 })
                         except:
+                            # Keep as string/object if all conversions fail
                             pass
         
         report['converted_columns'] = converted_columns
-        report['final_dtypes'] = df.dtypes.to_dict()
+        report['final_dtypes'] = {str(k): str(v) for k, v in df.dtypes.to_dict().items()}
         
         return df, report
     

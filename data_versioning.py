@@ -16,8 +16,21 @@ class DataVersioning:
         version_id = len(self.versions) + 1
         timestamp = datetime.now().isoformat()
         
-        # Create data hash for integrity
-        data_hash = hashlib.md5(pd.util.hash_pandas_object(df, index=True).values).hexdigest()
+        # Create data hash for integrity - handle unhashable types
+        try:
+            # Try to convert dict/list columns to strings first
+            df_copy = df.copy()
+            for col in df_copy.columns:
+                if df_copy[col].dtype == 'object':
+                    df_copy[col] = df_copy[col].apply(
+                        lambda x: str(x) if isinstance(x, (dict, list)) else x,
+                        errors='ignore'
+                    )
+            data_hash = hashlib.md5(pd.util.hash_pandas_object(df_copy, index=True).values).hexdigest()
+        except Exception as e:
+            # Fallback: hash based on shape, columns, and content
+            hash_input = f"{df.shape}_{list(df.columns)}_{datetime.now().isoformat()}"
+            data_hash = hashlib.md5(hash_input.encode()).hexdigest()
         
         version_info = {
             'version_id': version_id,
