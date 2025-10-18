@@ -1,28 +1,37 @@
-# Core framework
+# ----------------------------
+# Core Frameworks
+# ----------------------------
 streamlit
 flask
 
-# Data manipulation and analysis
+# ----------------------------
+# Data Handling & Processing
+# ----------------------------
 pandas
 numpy
 openpyxl
 XlsxWriter
-
-# Machine learning and preprocessing
 scikit-learn
 
-# Visualization
+# ----------------------------
+# Visualization Libraries
+# ----------------------------
 plotly
 kaleido
 matplotlib
 seaborn
 
-# PDF generation and reporting
-reportlab
-
-# Environment variables
-python-dotenv
-
-# File handling / utilities
+# ----------------------------
+# AI Integration & APIs
+# ----------------------------
 requests
 tqdm
+python-dotenv
+ollama
+
+# ----------------------------
+# Reporting & Export
+# ----------------------------
+reportlab
+
+streamlit requests
