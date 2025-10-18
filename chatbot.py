@@ -4,13 +4,17 @@ import json
 from typing import Optional, Dict, Any
 from dotenv import load_dotenv
 
-# Automatically load API keys from .env file
+# -----------------------------------------------------
+# Load environment variables from .env file automatically
+# -----------------------------------------------------
 load_dotenv()
 
 class LLaMAChat:
     """
-    Groq-based data analyst chatbot.
-    Automatically loads GROQ_API_KEY from .env file or environment variables.
+    Groq-based Data Analyst Chatbot.
+    - Loads GROQ_API_KEY from .env or environment variables.
+    - Analyzes datasets and provides natural, human-style insights.
+    - Does NOT include code in responses.
     """
 
     def __init__(self, model_name: str = "llama-3.3-70b-versatile", groq_api_key: Optional[str] = None):
@@ -20,10 +24,14 @@ class LLaMAChat:
 
         if not self.groq_api_key:
             raise ValueError(
-                "❌ GROQ_API_KEY not found. Please create a .env file in your project folder and add:\n"
+                "❌ GROQ_API_KEY not found.\n"
+                "Please create a .env file in your project folder and add:\n"
                 "GROQ_API_KEY=your_actual_key_here"
             )
 
+    # -----------------------------------------------------
+    # Build the prompt dynamically from query + dataset info
+    # -----------------------------------------------------
     def _build_prompt(self, query: str, context: Optional[Dict[str, Any]] = None) -> str:
         ctx = ""
         if context:
@@ -41,7 +49,7 @@ class LLaMAChat:
             if missing:
                 ctx_lines.append(f"- Missing values: {missing}")
             if summary:
-                ctx_lines.append(f"- Summary: {list(summary)[:5]}")
+                ctx_lines.append(f"- Summary of numeric columns: {list(summary.keys())[:5]}")
             if sample:
                 ctx_lines.append(f"- Sample rows: {sample}")
 
@@ -49,13 +57,20 @@ class LLaMAChat:
 
         prompt = (
             "You are an expert data analyst. "
-            "Provide clear insights, explain reasoning, and use examples where possible.\n\n"
+            "Analyze the dataset and provide a clear, human-like explanation "
+            "without showing any code or programming syntax. "
+            "Focus on patterns, trends, and insights in plain English.\n\n"
         )
+
         if ctx:
             prompt += f"Dataset context:\n{ctx}\n\n"
-        prompt += f"User question:\n{query}\n\nAnswer:"
+
+        prompt += f"User question:\n{query}\n\nAnswer in natural language only:"
         return prompt
 
+    # -----------------------------------------------------
+    # Send request to Groq API (OpenAI-compatible endpoint)
+    # -----------------------------------------------------
     def _call_groq(self, prompt: str, timeout: int = 120) -> str:
         headers = {
             "Authorization": f"Bearer {self.groq_api_key}",
@@ -65,7 +80,15 @@ class LLaMAChat:
         payload = {
             "model": self.model_name,
             "messages": [
-                {"role": "system", "content": "You are an AI assistant that helps data analysts."},
+                {
+                    "role": "system",
+                    "content": (
+                        "You are an AI data analyst. "
+                        "Explain insights clearly, naturally, and conversationally. "
+                        "Do not include any code, libraries, or syntax. "
+                        "Give conclusions like a professional consultant."
+                    )
+                },
                 {"role": "user", "content": prompt}
             ],
             "temperature": 0.3
@@ -75,6 +98,7 @@ class LLaMAChat:
             response = requests.post(self.groq_url, headers=headers, json=payload, timeout=timeout)
             response.raise_for_status()
             result = response.json()
+
             if "choices" in result and len(result["choices"]) > 0:
                 return result["choices"][0]["message"]["content"].strip()
             else:
@@ -82,6 +106,9 @@ class LLaMAChat:
         except requests.exceptions.RequestException as e:
             return f"❌ API Request Failed: {e}"
 
+    # -----------------------------------------------------
+    # Public method — used by Streamlit app
+    # -----------------------------------------------------
     def generate_response(self, query: str, context: Optional[Dict[str, Any]] = None) -> str:
         prompt = self._build_prompt(query, context)
         return self._call_groq(prompt)
